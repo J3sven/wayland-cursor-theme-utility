@@ -17,7 +17,7 @@ This utility is designed to **fix cross-environment cursor theming issues** by e
 
 ### 1. Download the script:
 ```bash
-wget https://example.com/path/to/wayland-cursor-theme-utility.sh -O cursor-utility.sh
+wget https://raw.githubusercontent.com/J3sven/wayland-cursor-theme-utility/refs/heads/main/cursor-utility.sh -O cursor-utility.sh
 chmod +x cursor-utility.sh
 ```
 
