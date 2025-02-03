@@ -11,37 +11,33 @@ fi
 echo "--------------------------------------"
 echo "🖱️  Wayland Cursor Theme Utility"
 echo "--------------------------------------"
+echo "This script configures cursor themes on Wayland systems."
 
-# Step 1: Determine the correct home directory (in case of sudo) and scan for themes
-if [ "$EUID" -eq 0 ] && [ -n "$SUDO_USER" ]; then
-    ORIGINAL_HOME=$(eval echo "~$SUDO_USER")
-    ORIGINAL_HOME=$HOME
-fi
-
-ROOT_REQUIRED=false
+# Step 1: Ask if the user grants permission to use sudo for system-wide settings
+USE_SUDO=false
 if [ "$EUID" -ne 0 ]; then
-    echo "⚠️  You are not running the script as root."
-    echo "Some system-wide settings will require root privileges."
     echo ""
-    read -p "Would you like to restart the script as sudo for system-wide settings? (y/n): " use_sudo
-    if [[ "$use_sudo" == [yY] ]]; then
-        echo "Restarting the script with sudo..."
-        exec sudo bash "$0" "$@"
+    echo "⚠️  Some system-wide configurations require root privileges (sudo)."
+    read -p "Do you allow this script to use sudo where needed? (y/n): " allow_sudo
+    if [[ "$allow_sudo" == [yY] ]]; then
+        USE_SUDO=true
+        echo "✔️  Sudo access granted for necessary commands."
     else
-        echo "Continuing with user-specific configurations only."
+        echo "⚠️  Sudo access not granted. System-wide settings will be skipped."
     fi
 else
-    ROOT_REQUIRED=true
+    echo "✔️  Running as root. Sudo is not required."
+    USE_SUDO=true
 fi
 
-echo "This script configures cursor themes on Wayland systems."
 echo "--------------------------------------"
 echo ""
 read -p "Press Enter to continue to theme selection... "
 
+# Step 2: List available cursor themes
 list_cursor_themes() {
     local themes=()
-    local theme_dirs=("/usr/share/icons" "$ORIGINAL_HOME/.icons" "$ORIGINAL_HOME/.local/share/icons")
+    local theme_dirs=("/usr/share/icons" "$HOME/.icons" "$HOME/.local/share/icons")
 
     for dir in "${theme_dirs[@]}"; do
         if [ -d "$dir" ]; then
@@ -117,31 +113,33 @@ execute() {
     fi
 }
 
-# Step 2: Set cursor environment variables globally (Wayland and Hyprland)
-ENV_CONF="${ORIGINAL_HOME}/.config/environment.d/cursor.conf"
+# Step 3: Set cursor environment variables globally (Wayland and Hyprland)
+ENV_CONF="$HOME/.config/environment.d/cursor.conf"
 execute "mkdir -p \"$(dirname "$ENV_CONF")\""
 execute "echo -e \"XCURSOR_THEME=$CURSOR_THEME\nXCURSOR_SIZE=$CURSOR_SIZE\" > \"$ENV_CONF\""
 
 echo "✔️ Applied xcursor theme (Wayland environment variables)"
 
+# Step 4: Re-exec user daemon if not running as root
+echo "🔄 Re-executing user daemon to apply changes..."
 execute "systemctl --user daemon-reexec"
 
-# Step 3: Set cursor theme for GTK (Wayland and X11)
-GTK_CONF="${ORIGINAL_HOME}/.config/gtk-3.0/settings.ini"
+# Step 5: Set cursor theme for GTK
+GTK_CONF="$HOME/.config/gtk-3.0/settings.ini"
 execute "mkdir -p \"$(dirname "$GTK_CONF")\""
 execute "echo -e \"[Settings]\ngtk-cursor-theme-name = $CURSOR_THEME\ngtk-cursor-theme-size = $CURSOR_SIZE\" > \"$GTK_CONF\""
 
 echo "✔️ Applied GTK theme settings"
 
-# Step 4: Set cursor theme for X11 (XWayland)
-XRESOURCES="${ORIGINAL_HOME}/.Xresources"
+# Step 6: Set cursor theme for X11
+XRESOURCES="$HOME/.Xresources"
 execute "echo -e \"Xcursor.theme: $CURSOR_THEME\nXcursor.size: $CURSOR_SIZE\" > \"$XRESOURCES\""
 execute "xrdb -merge \"$XRESOURCES\""
 
 echo "✔️ Applied X11 cursor theme settings"
 
-# Step 5: Set cursor theme for Hyprland
-HYPRLAND_CONF="${ORIGINAL_HOME}/.config/hypr/hyprland.conf"
+# Step 7: Set cursor theme for Hyprland
+HYPRLAND_CONF="$HOME/.config/hypr/hyprland.conf"
 if [ -f "$HYPRLAND_CONF" ]; then
     if pgrep -x "Hyprland" > /dev/null; then
         execute "hyprctl --batch cursor \"$CURSOR_THEME $CURSOR_SIZE\""
@@ -154,30 +152,16 @@ else
     echo "⚠️  Hyprland configuration file not found. Skipping Hyprland setup."
 fi
 
-# Step 6: Set system-wide cursor theme (only if root privileges are available)
-if [ "$ROOT_REQUIRED" = true ]; then
+# Step 8: Set system-wide cursor theme (if sudo is allowed)
+if [ "$USE_SUDO" = true ]; then
     GLOBAL_ICON_DIR="/usr/share/icons/default"
-    execute "mkdir -p \"$GLOBAL_ICON_DIR\""
-    execute "bash -c \"echo -e '[Icon Theme]\nInherits=$CURSOR_THEME' > $GLOBAL_ICON_DIR/index.theme\""
-    execute "gtk-update-icon-cache /usr/share/icons/$CURSOR_THEME || true"
+    execute "sudo mkdir -p \"$GLOBAL_ICON_DIR\""
+    execute "sudo bash -c \"echo -e '[Icon Theme]\nInherits=$CURSOR_THEME' > $GLOBAL_ICON_DIR/index.theme\""
+    execute "sudo gtk-update-icon-cache /usr/share/icons/$CURSOR_THEME || true"
     echo "✔️ Applied system-wide cursor theme and updated icon cache"
 else
-    echo "⚠️  Skipping system-wide settings due to missing root privileges."
+    echo "⚠️  Skipping system-wide settings due to missing sudo privileges."
 fi
 
 echo "✔️ Cursor theme setup completed successfully!"
-
-if [[ "$reboot_choice" == [yY] ]]; then
-    if [ "$DRY_RUN" = true ]; then
-        echo "[DRY-RUN] Simulating reboot... (No actual reboot will occur)"
-    else
-        echo "Rebooting the system..."
-        if [ "$EUID" -eq 0 ]; then
-            reboot
-        else
-            sudo reboot
-        fi
-    fi
-else
-    echo "Reboot skipped. Please reboot manually to apply changes."
-fi
+echo "Please restart your session or run 'systemctl --user daemon-reexec' to fully apply the changes."
