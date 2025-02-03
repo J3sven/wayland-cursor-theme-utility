@@ -25,11 +25,6 @@ chmod +x cursor-utility.sh
 ```bash
 ./cursor-utility.sh
 ```
-If you wish for the cursor theme to be applied system-wide you will have to run the script as superuser
-```bash
-sudo ./cursor-utility.sh
-```
-
 
 You can also enable **dry-run mode** to see what the script would do without making any changes:
 ```bash
